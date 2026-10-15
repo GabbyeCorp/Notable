@@ -39,19 +39,24 @@ MyTasks is a personal organization app for Android and PC. It lets a user keep n
 - The list view shows the number of currently visible items at the top. When filters are active, the count reflects only items matching those filters.
 - Each item row shows an icon identifying its type and its tags as small chips. A note row shows its display date, title, content preview, and image thumbnail when present. Hide the title or content preview when that field is empty; do not reserve blank space for it.
 - Users can create, edit, move, and delete items in a list.
+- For every saved edit to a persisted entity, record a separate history entry for each changed field, including that field's old value, new value, and the date/time of the change. Do not create entries for unchanged fields.
+- Users can clone an item as a new independent item, choosing whether to include its subtasks (recursively) and whether to copy its tag assignments. Cloning preserves the item's content and type-specific fields.
+- Users can select multiple items in a list and add or remove tags from all selected items in one operation.
 - Users can manually reorder items within a list. The chosen order is persisted and synchronized.
+- Users can sort list items by title (A-Z), creation date, or modified date (`updatedDateTime`), in either ascending or descending order. A custom sort displays the user's manually chosen order; using another sort must not overwrite it, and returning to custom sort restores that order.
 - A list can contain any mixture of notes, to-dos, and scheduled tasks.
 - Moving an item between lists must preserve its content, tags, subtasks, and attachments.
 - The app must provide an understandable empty state for a list with no items.
 
 ### 4.2 Notes
 
-- A note has a title (optional), rich-text content, zero or one image, zero or more tags, a created timestamp, and a user-editable display date. The display date defaults to the note's created date.
+- A note has a title (optional), rich-text content, up to three images, zero or more tags, a created timestamp, and a user-editable display date. The display date defaults to the note's created date.
 - Users can create, view, edit, and delete notes.
 - Note text supports bold, italic, and strikethrough formatting.
-- A note may have one attached image, with a maximum file size of 10 MB. Supported formats are JPEG/JPG, PNG, and WebP. The app must validate the file type and size and explain when an image is unsupported or exceeds the limit.
-- The list view must render an image thumbnail for notes that have an image. Notes without an image must remain compact and must not show an empty image placeholder.
-- Selecting a thumbnail opens the image at a larger size. The note remains readable and editable offline.
+- Users can add note images by selecting them from device storage or taking a photo with the device camera when available and authorized.
+- A note may have up to three attached images. Each image must be no larger than 10 MB and use JPEG/JPG, PNG, or WebP format. The app must validate image count, file type, and size, and explain when an image is unsupported, exceeds the size limit, or the note already has three images.
+- The list view must render image thumbnails for notes that have images. Notes without images must remain compact and must not show an empty image placeholder.
+- Selecting a thumbnail opens that image at a larger size. The note remains readable and editable offline.
 - Images and thumbnails must be stored locally and queued for synchronization when offline.
 - Deleting a note removes its attachment association; attachment data may be physically removed only when it is no longer referenced and its deletion is synchronized.
 
@@ -61,7 +66,9 @@ MyTasks is a personal organization app for Android and PC. It lets a user keep n
 - A scheduled task has the same core fields as a to-do and may additionally have a start date/time, an end date/time, recurrence rules, and reminder settings.
 - A task can be completed or reopened. Its subtasks have independent completion states.
 - Completing a to-do or scheduled task records its completion date/time. Reopening and completing it again updates the recorded completion date/time to the latest completion.
+- When a to-do or subtask is completed, display it at the bottom of its current sibling level; completing a parent does not change the order or completion state of its subtasks. When a scheduled task is completed, move it to the bottom of that day's scheduled tasks, then remove it from the active day view. Completed tasks and subtasks that are displayed use grayish text and italic styling. Reopening an item restores its original manually chosen position and normal text styling; completion-driven display ordering must not overwrite the saved manual order.
 - Users can manually reorder subtasks within their parent task. The chosen order is persisted and synchronized.
+- Users can sort subtasks within a parent by title (A-Z), creation date, or modified date (`updatedDateTime`), in either ascending or descending order. A custom sort displays the user's manually chosen sibling order; using another sort must not overwrite it, and returning to custom sort restores that order.
 - A to-do or scheduled task may have subtasks nested to a maximum of **three subtask levels below the top-level task** (four task nodes including the root). The app must prevent creating a subtask that exceeds this limit and must clearly communicate the limit.
 - Subtasks inherit neither tags nor schedule values from their parent. Users may assign tags and, for scheduled-task subtasks, dates/times independently.
 - When a parent task is completed, its subtasks are not silently changed. The UI may show incomplete subtasks so the parent completion does not hide unfinished work.
@@ -76,6 +83,7 @@ MyTasks is a personal organization app for Android and PC. It lets a user keep n
 - Tags may be nested without a product-imposed depth limit in the initial release; the UI must remain navigable for deep hierarchies.
 - Any note, to-do, or scheduled task can have zero or more tags, including tags at any hierarchy level.
 - Assigning a parent tag does not automatically assign its child tags, and assigning a child tag does not automatically assign its parent.
+- From a list, users can add a selected tag to or remove a selected tag from multiple selected items at once. Bulk add preserves all other tag assignments, and bulk remove removes only the selected tag from the selected items. This works across notes, to-dos, and scheduled tasks.
 - Users can filter items by one or more selected tags. The filter must make it clear whether selecting a parent includes items tagged only with descendants; initial behavior is exact-tag matching, with an option to include descendants.
 - Deleting a tag removes that tag assignment from items but does not delete the items. Deleting a tag with children requires the user to confirm whether to delete the entire subtree or first move/reparent the children.
 
@@ -92,6 +100,7 @@ MyTasks is a personal organization app for Android and PC. It lets a user keep n
 - All committed local changes must be persisted on the device before the UI reports success.
 - Local changes must enter a durable synchronization queue and sync automatically when connectivity returns.
 - Synchronization must cover list and item changes, manual ordering, tag hierarchies and assignments, task completion dates, schedules and recurrence rules, reminder settings, and attachment data.
+- Synchronization must include field-level change history entries.
 - The UI must indicate offline status and distinguish pending synchronization from synchronization failure. Failures must be retryable and must not discard local changes.
 - Deletions must use synchronized tombstones or an equivalent mechanism so deleted data is not restored by another device.
 - Synchronization must be idempotent: retrying an operation must not create duplicate lists, items, tags, or attachments.
@@ -108,12 +117,13 @@ All persisted entities have stable globally unique IDs, created/updated timestam
 
 - **List:** `id`, `name`, `sortOrder`, timestamps, deletion marker.
 - **Item:** `id`, `listId`, `type` (`note`, `todo`, or `scheduledTask`), `title`, type-specific content, `sortOrder`, timestamps, deletion marker.
-- **Note content:** rich-text body, optional user-editable display date, and zero or one attachment reference.
+- **Note content:** rich-text body, optional user-editable display date, and up to three attachment references.
 - **Task content:** description, completion state and completion date/time, optional schedule start/end, recurrence rule, and reminder settings.
 - **Subtask:** task identity, parent-task reference, and `sortOrder`. Parent links must not form cycles, and nesting must not exceed three subtask levels below the root.
 - **Tag:** `id`, optional `parentTagId`, `name`, `sortOrder`, timestamps, deletion marker. Parent references must not form cycles.
 - **Item-tag assignment:** item ID and tag ID, represented separately to support multiple tags per item.
-- **Attachment:** `id`, owning note ID, local file reference, content type (`image/jpeg`, `image/png`, or `image/webp`; JPEG and JPG extensions map to `image/jpeg`), file size (maximum 10 MB), image dimensions, thumbnail reference, content hash, upload/sync state, deletion marker. Account storage usage counts stored attachment data against the 2 GB quota.
+- **Change history entry:** entity ID and type, changed field name, old value, new value, and `updatedDateTime`. Each entry records exactly one field change.
+- **Attachment:** `id`, owning note ID, local file reference, content type (`image/jpeg`, `image/png`, or `image/webp`; JPEG and JPG extensions map to `image/jpeg`), file size (maximum 10 MB per image), image dimensions, thumbnail reference, content hash, upload/sync state, deletion marker. A note may reference at most three attachments. Account storage usage counts stored attachment data against the 2 GB quota.
 
 The local database is the source of truth for the on-device user experience. Use a transactional local store and keep persistence and sync logic out of Flutter presentation widgets. Keep reusable app services and data models decoupled from screen layout so future Android and Windows widgets can surface selected lists or tasks without changing core data behavior. Select and evaluate a Flutter-compatible local database package before implementation; Firebase is the selected remote authentication and synchronization provider.
 
@@ -138,10 +148,10 @@ The local database is the source of truth for the on-device user experience. Use
 ## 8. Acceptance criteria
 
 1. A user can create two lists and place notes, to-dos, and scheduled tasks in either list; the item count at the top reflects active filters.
-2. A note supports bold, italic, and strikethrough text, has a display date defaulting to its creation date, and can contain at most one JPEG/JPG, PNG, or WebP image of 10 MB or less. Unsupported formats and oversized images are rejected with an explanation. The image shows as a list thumbnail and remains available after restarting offline.
-3. A task can contain three nested subtask levels; attempting to add a fourth nested level is blocked with an explanation. Items and subtasks retain their manually selected order after restart and synchronization.
+2. A note supports bold, italic, and strikethrough text, has a display date defaulting to its creation date, and can contain up to three JPEG/JPG, PNG, or WebP images of at most 10 MB each, selected from device storage or captured with an authorized available camera. Unsupported formats, oversized images, and attempts to add more than three images are rejected with an explanation. Images show as list thumbnails and remain available after restarting offline.
+3. A task can contain three nested subtask levels; attempting to add a fourth nested level is blocked with an explanation. Items and subtasks retain their manually selected order after restart and synchronization. Completing a to-do or subtask moves it to the bottom of its sibling level and styles it grayish and italic; reopening it restores its original position and normal styling. Completing a scheduled task styles it grayish and italic, moves it to the bottom of that day's scheduled tasks, and then removes it from the active day view.
 4. Tags can be nested, assigned to each item type, and used for inclusion and exclusion filtering according to the documented exact-match/descendant-filter behavior.
-5. Completing a to-do or scheduled task records its completion date/time, and completing it again after reopening updates that value.
+5. Completing a to-do or scheduled task records its completion date/time, and completing it again after reopening updates that value. Reopening restores the item's original manual position and normal styling. Completed scheduled tasks move to the bottom of that day's group before disappearing from the active day view.
 6. A scheduled task can recur daily, weekly on selected days, monthly, or yearly using `rrule`. Reminders can be configured; only the immediate next notification per task is scheduled and recalculated after it fires or the task changes, notification spacing for a task is at least 15 minutes, and an authorized device can deliver it while offline.
 7. A user can create and edit data in airplane mode, close and reopen the app, and see the changes preserved.
 8. A user can securely pair another device from an already-authorized device using a short-lived, single-use pairing code or QR flow; expired or reused pairing credentials are rejected. After connectivity returns, offline changes and image attachments synchronize between paired devices without duplicates.
@@ -151,6 +161,10 @@ The local database is the source of truth for the on-device user experience. Use
 12. The app authenticates users anonymously through Firebase and provides no account creation, account deletion, or account recovery flow. Paired devices access the same user's synchronized data; the app clearly explains that losing all paired devices means the data space cannot be recovered.
 13. The app builds and runs on Android 15 or later and Windows 11 from the Flutter/Dart codebase.
 14. The app warns when account storage reaches 1 GB and enforces the 2 GB account-wide storage quota.
+15. From a list, a user can select multiple notes, to-dos, and scheduled tasks, add a tag to all selected items without changing their other tags, and remove a selected tag from all selected items without changing their other tags.
+16. A user can clone an item with or without its subtasks and independently with or without its tag assignments; the clone is a new item and does not alter the original.
+17. Editing an entity records each changed field as a separate history entry with its old value, new value, and update date/time; unchanged fields do not get history entries.
+18. List items and each subtask sibling group can be sorted by title A-Z, creation date, or modified date, in either direction. Switching from custom order to another sort and back restores the original manually chosen order without changes.
 
 ## 9. Storage quota measurement and upload failures
 
